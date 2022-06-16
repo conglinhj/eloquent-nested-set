@@ -57,6 +57,26 @@ trait EloquentNestedSet
     }
 
     /**
+     * Get table name
+     *
+     * @return string
+     */
+    public static function tableName(): string
+    {
+        return (new static)->getTable();
+    }
+
+    /**
+     * get primary column name
+     *
+     * @return string
+     */
+    public static function primaryColumn(): string
+    {
+        return (new static)->getKeyName();
+    }
+
+    /**
      * @return mixed
      */
     public static function rootNode(): mixed
@@ -74,8 +94,7 @@ trait EloquentNestedSet
     {
         // Ignore root node in global scope
         static::addGlobalScope('ignore_root', function (Builder $builder) {
-            $tableName = (new static)->getTable();
-            $builder->where($tableName . '.id', '<>', static::rootId());
+            $builder->where(static::tableName() . '.' . static::primaryColumn(), '<>', static::rootId());
         });
         static::saving(function (Model $model) {
             if (empty($model->{static::parentIdColumn()})) {
@@ -167,18 +186,42 @@ trait EloquentNestedSet
     }
 
     /**
-     * Get all entities in nested array
+     * Initial a query builder to interact with tree
+     *
+     * @param int|null $parentId
+     * @return Builder
      */
-    public static function getTree(): Collection
+    public static function tree(int $parentId = null): Builder
     {
-        $nodes = static::all()->groupBy(static::parentIdColumn());
-        $tree = collect([]);
-        $tree->push(...$nodes->get(static::rootId()) ?? []);
+        $parentId = $parentId ?: static::rootId();
+        $tableName = static::tableName();
 
-        $getChildrenFunc = null;
-        $getChildrenFunc = function ($tree) use (&$getChildrenFunc, $nodes) {
+        return static::query()
+            ->selectRaw("$tableName.*")
+            ->join("$tableName as parent", function ($join) use ($tableName, $parentId) {
+                $join
+                    ->on("$tableName." . static::leftColumn(), '>', 'parent.' . static::leftColumn())
+                    ->on("$tableName." . static::leftColumn(), '<', 'parent.' . static::rightColumn())
+                    ->where('parent.' . static::primaryColumn(), '=', $parentId);
+            })
+            ->orderBy("$tableName." . static::leftColumn());
+    }
+
+    /**
+     * Build a nested tree
+     *
+     * @param Collection $nodes
+     * @return Collection
+     */
+    public static function buildNestedTree(Collection $nodes): Collection
+    {
+        $tree = collect([]);
+        $groupNodes = $nodes->groupBy(static::parentIdColumn());
+        $tree->push(...$groupNodes->get(static::rootId()) ?? []);
+
+        $getChildrenFunc = function ($tree) use (&$getChildrenFunc, $groupNodes) {
             foreach ($tree as $item) {
-                $item->children = $nodes->get($item->id) ?: [];
+                $item->children = $groupNodes->get($item->id) ?: [];
                 $getChildrenFunc($item->children);
             }
         };
@@ -188,19 +231,43 @@ trait EloquentNestedSet
     }
 
     /**
-     * Get all parent in nested array
+     * Get all nodes in nested array
      */
-    public function getAncestorsTree()
+    public static function getTree(): Collection
     {
-        // TODO
+        $nodes = static::tree()->get();
+
+        return static::buildNestedTree($nodes);
+    }
+
+    /**
+     * Get all nodes order by parent-children relationship in flat array
+     *
+     * @return Collection
+     */
+    public static function getFlatTree(): Collection
+    {
+        return static::tree()->get();
+    }
+
+    /**
+     * Get all parent in nested array
+     *
+     * @return Collection
+     */
+    public function getAncestorsTree(): Collection
+    {
+        return static::buildNestedTree($this->ancestors()->get());
     }
 
     /**
      * Get all descendants in nested array
+     *
+     * @return Collection
      */
-    public function getDescendantsTree()
+    public function getDescendantsTree(): Collection
     {
-        // TODO
+        return static::buildNestedTree($this->descendants()->get());
     }
 
     /**
@@ -261,7 +328,7 @@ trait EloquentNestedSet
             $width = $this->getWidth();
             $currentLft = $this->{static::leftColumn()};
             $currentRgt = $this->{static::rightColumn()};
-            $query = static::withoutGlobalScope('ignore_root')->whereNot('id', $this->id);
+            $query = static::withoutGlobalScope('ignore_root')->whereNot(static::primaryColumn(), $this->id);
 
             // Tạm thời để left và right các node con của node hiện tại ở giá trị âm
             $this->descendants()->update([
