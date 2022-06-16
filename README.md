@@ -1,0 +1,1 @@
+# Eloquent Nested Set Model
