@@ -1,0 +1,21 @@
+{
+    "name": "linhnc/eloquent-nested-set",
+    "description": "Just my 'homework'",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Linhnc\\EloquentNestedSet\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "LinhNC",
+            "email": "linhnc184@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/database": "^9.17",
+        "illuminate/support": "^9.17"
+    }
+}
