@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -90,7 +89,7 @@ trait EloquentNestedSet
      * @return void
      * @throws Throwable
      */
-    public static function booted(): void
+    public static function bootEloquentNestedSet(): void
     {
         // Ignore root node in global scope
         static::addGlobalScope('ignore_root', function (Builder $builder) {
@@ -100,9 +99,6 @@ trait EloquentNestedSet
             if (empty($model->{static::parentIdColumn()})) {
                 $model->{static::parentIdColumn()} = static::rootId();
             }
-            DB::listen(function ($query) {
-                Log::channel('eloquent_nested_set')->debug('___', (array)$query);
-            });
         });
         static::creating(function (Model $model) {
             $model->updateTreeOnCreating();
